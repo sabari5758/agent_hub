@@ -1,10 +1,12 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, after_kickoff, agent, before_kickoff, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
-from agent_hub.schema import JobBoardResponse, TrendResponse
+from agent_hub.schema import JobResult, TrendResult
 
 from crewai_tools import  SerperDevTool, WebsiteSearchTool
 # If you want to run a snippet of code before or after the crew starts,
@@ -23,7 +25,10 @@ class AgentHub():
     api_key=os.getenv("GROQ_API_KEY"), # Primary Key
     fallbacks=[
         # If Groq fails, LiteLLM looks for GEMINI_API_KEY in your .env
-        "gemini/gemini-2.0-flash" 
+        LLM(
+            model="gemini/gemini-2.0-flash",
+            api_key=os.getenv("GEMINI_API_KEY")
+        )
     ]
 )
 
@@ -35,8 +40,15 @@ class AgentHub():
     # https://docs.crewai.com/concepts/agents#agent-tools
     
     # config tools
-    search_tool = SerperDevTool()
-    web_tool = WebsiteSearchTool()
+    # Explicitly naming tools to prevent LLM from hallucinating incorrect tool names
+    search_tool = SerperDevTool(
+        name="google_search",
+        description="Search the internet for up-to-date news, trends, and information."
+    )
+    web_tool = WebsiteSearchTool(
+        name="website_scraper",
+        description="Scrape and read the content of a specific website URL."
+    )
 
     @before_kickoff
     def announce_start(self, inputs):
@@ -86,7 +98,7 @@ class AgentHub():
         return Task(
             config=self.tasks_config['research_task'], # type: ignore[index]
             create_directory=True,
-            output_pydantic=TrendResponse
+            output_pydantic=TrendResult
         )
 
     @task
@@ -94,7 +106,7 @@ class AgentHub():
         return Task(
             config=self.tasks_config['analysis_task'], # type: ignore[index]
             create_directory=True,
-            output_pydantic=JobBoardResponse
+            output_pydantic=JobResult
         )
 
     @crew

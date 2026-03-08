@@ -13,10 +13,9 @@ class TechTrend(BaseModel):
     source_url: Optional[str]
     img: Optional[str]
 
-class TrendResponse(BaseModel):
+class TrendResult(BaseModel):
+    """Schema for LLM output."""
     trends: List[TechTrend]
-    status: str
-
 class JobOpening(BaseModel):
     """Schema for an individual frontend job opening."""
     title: str = Field(..., description="The job title (e.g., Senior React Developer)")
@@ -24,7 +23,8 @@ class JobOpening(BaseModel):
     img: Optional[str] = Field(None, description="A placeholder or actual URL for a company logo or tech icon")
     url: str = Field(..., description="The direct link to the job application or posting")
 
-class JobBoardResponse(BaseModel):
-    """Container schema for the list of job openings."""
+class JobResult(BaseModel):
+    """Schema for LLM output containing job openings."""
     jobs: List[JobOpening] = Field(..., description="A list of 5 to 10 frontend job openings")
     topic: str = Field(..., description="The specific frontend topic researched")
+

@@ -1,31 +1,32 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from agent_hub.crew import AgentHub
-
-app = FastAPI()
-
-class CrewInput(BaseModel):
-    topic: str
-
 from fastapi import FastAPI, HTTPException
 from agent_hub.crew import AgentHub
-from agent_hub.schema import TrendRequest, TrendResponse
+from agent_hub.schema import TrendRequest, TrendResult, JobResult
+from crewai import Crew
 
 app = FastAPI(title="IT Sector Agent API")
 tracker = AgentHub()
 
 # ENDPOINT 1: Only runs the Tech Scout / Research
-@app.post("/research", response_model=TrendResponse)
+@app.post("/research", response_model=TrendResult)
 async def get_tech_trends(payload: TrendRequest):
     try:
-        # We manually trigger just the research task
-        inputs =  payload.topic
-    
+        # Create a temporary crew to run just the research task
+        # We must manually assign the agent to the task for this isolated execution
+        agent = tracker.tech_scout()
+        task = tracker.research_task()
+        task.agent = agent
         
-        # Logic: Use the specific task/agent without running the whole crew
-        # Note: 'research_task' must be defined in your CrewBase class
-        result = tracker.research_task().execute_sync(context=inputs)
-        print(f"DEBUG: Raw Agent Output: {result.raw}")
+        crew = Crew(
+            agents=[agent],
+            tasks=[task],
+            verbose=True
+        )
+
+        result = crew.kickoff(inputs={
+            "topic": payload.topic,
+            "platform": payload.platform 
+        })
+        
         # 2. Extract raw data safely
         # If result.pydantic exists, convert it to a dict first
         raw_data = []
@@ -42,21 +43,38 @@ async def get_tech_trends(payload: TrendRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ENDPOINT 2: Only runs the Career Analyst
-@app.post("/career-advice")
+@app.post("/career-advice", response_model=JobResult)
 async def get_career_advice(payload: TrendRequest):
-    # This endpoint could take the output of Endpoint 1 as input
     try:
-        result = tracker.analysis_task().execute_sync(context=payload.topic)
+        agent = tracker.career_analyst()
+        task = tracker.analysis_task()
+        task.agent = agent
+
+        crew = Crew(
+            agents=[agent],
+            tasks=[task],
+            verbose=True
+        )
+
+        result = crew.kickoff(inputs={
+            "topic": payload.topic,
+            "platform": payload.platform 
+        })
         
         raw_data = []
+        topic_result = payload.topic
+
         if result.pydantic and hasattr(result.pydantic, 'jobs'):
             print(f"DEBUG: Pydantic Output: {result.pydantic}")
             raw_data = [t.model_dump() if hasattr(t, 'model_dump') else t for t in result.pydantic.jobs]
+            if hasattr(result.pydantic, 'topic'):
+                topic_result = result.pydantic.topic
         elif result.json_dict:
             print(f"DEBUG: Raw Agent Output: {result.raw}")
             raw_data = result.json_dict.get('jobs', [])
+            topic_result = result.json_dict.get('topic', payload.topic)
         
-        return {"advice": raw_data, "status": "completed"}
+        return {"jobs": raw_data, "topic": topic_result, "status": "completed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

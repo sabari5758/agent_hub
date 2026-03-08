@@ -1,0 +1,25 @@
+[project]
+name = "agent_hub"
+version = "0.1.0"
+description = "agent_hub using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[google-genai,litellm,tools]==1.9.3",
+    "fastapi>=0.135.1",
+]
+
+[project.scripts]
+agent_hub = "agent_hub.main:run"
+run_crew = "agent_hub.main:run"
+train = "agent_hub.main:train"
+replay = "agent_hub.main:replay"
+test = "agent_hub.main:test"
+run_with_trigger = "agent_hub.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"

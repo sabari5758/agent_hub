@@ -1,0 +1,23 @@
+research_task:
+  description: >
+    Search for the latest breakthroughs in {topic} on {platform}.
+    You MUST provide real, clickable URLs. 
+    Present the findings clearly, including links to any relevant images.
+    DO NOT use placeholder URLs like 'example.com'.
+  expected_output: >
+    A structured JSON object containing a list 3 trends.
+    Each URL must start with {platform}.
+    Each trend must have a 'title', 'summary', and 'url'.
+    Do not include any introductory or concluding text.
+  agent: tech_scout
+
+analysis_task:
+  description: >
+    Search for LIVE frontend job openings for {topic} on {platform}. 
+    You MUST provide real, clickable URLs. 
+    If you cannot find a direct link, use a reputable job board like Indeed or Glassdoor. 
+    DO NOT use placeholder URLs like 'example.com'.
+  expected_output: >
+    A list of 5-10 REAL job openings with verified URLs. 
+    Each URL must start with {platform} or a valid job board domain.
+  agent: career_analyst

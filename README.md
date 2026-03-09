@@ -1,54 +1,62 @@
-# AgentHub Crew
+# AgentHub - IT Sector Intelligence Crew
 
-Welcome to the AgentHub Crew project, powered by [crewAI](https://crewai.com). This template is designed to help you set up a multi-agent AI system with ease, leveraging the powerful and flexible framework provided by crewAI. Our goal is to enable your agents to collaborate effectively on complex tasks, maximizing their collective intelligence and capabilities.
+**AgentHub** is an intelligent multi-agent system exposed via a REST API. It uses autonomous AI agents to research technology trends and provide career analysis for the IT sector.
 
-## Installation
+## 🔄 How it Works (API Flow)
 
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
+When you call an endpoint (e.g., `/research`), the following process occurs:
 
-First, if you haven't already, install uv:
+1.  **Request**: You send a POST request with a JSON payload (e.g., `{"topic": "AI Agents"}`) to the API.
+2.  **Orchestration (`api.py`)**:
+    *   The FastAPI application receives the request and validates it against the `TrendRequest` schema.
+    *   Instead of running a massive crew with all agents, the API dynamically selects only the specific **Agent** (e.g., `tech_scout`) and **Task** (e.g., `research_task`) needed for this specific endpoint.
+    *   It assembles a temporary, isolated `Crew` instance.
+3.  **Execution (`crew.py`)**:
+    *   The `Crew` kicks off the task using the **Groq LLM** (Llama 3.3).
+    *   The Agent utilizes its assigned tools (like `google_search` or `website_scraper`) to gather real-time information from the web.
+4.  **Response**:
+    *   The Agent parses the raw findings into a structured Pydantic model (`TrendResult` or `JobResult`).
+    *   The API converts this into a clean JSON response and sends it back to you.
+
+## 📂 Project Logic & Key Files
+
+The core intelligence and behavior of this project are defined in these specific files:
+
+### 1. `src/agent_hub/api.py` (The Interface)
+*   **Role**: The API Controller.
+*   **Logic**: This file defines the FastAPI endpoints. It acts as the bridge between the outside world and your AI agents. It handles input validation, triggers the specific agentic workflow, and ensures the output is formatted correctly before returning it to the client.
+
+### 2. `src/agent_hub/crew.py` (The Brain)
+*   **Role**: The CrewAI Configuration.
+*   **Logic**: This file defines the `AgentHub` class. It configures:
+    *   **Agents**: Who they are (Tech Scout, Career Analyst) and what LLM they use.
+    *   **Tasks**: What they need to do (Research, Analysis) and the expected output format.
+    *   **Tools**: The capabilities given to agents (e.g., Google Search).
+
+### 3. `src/agent_hub/config/*.yaml` (The Persona)
+*   **Logic**: These YAML files (`agents.yaml`, `tasks.yaml`) contain the natural language prompts that define the personality, goals, and specific instructions for your agents.
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python >=3.10
+- UV (recommended)
+- API Keys in `.env`: `GROQ_API_KEY`, `SERPER_API_KEY`
+
+### Installation
 
 ```bash
 pip install uv
-```
-
-Next, navigate to your project directory and install the dependencies:
-
-(Optional) Lock the dependencies and install them by using the CLI command:
-```bash
 crewai install
 ```
-### Customizing
 
-**Add your `OPENAI_API_KEY` into the `.env` file**
-
-- Modify `src/agent_hub/config/agents.yaml` to define your agents
-- Modify `src/agent_hub/config/tasks.yaml` to define your tasks
-- Modify `src/agent_hub/crew.py` to add your own logic, tools and specific args
-- Modify `src/agent_hub/main.py` to add custom inputs for your agents and tasks
-
-## Running the Project
-
-To kickstart your crew of AI agents and begin task execution, run this from the root folder of your project:
+### Running the API
 
 ```bash
-$ crewai run
+python src/agent_hub/api.py
 ```
 
-This command initializes the agent_hub Crew, assembling the agents and assigning them tasks as defined in your configuration.
+The server will start at `http://0.0.0.0:8000`.
 
-This example, unmodified, will run the create a `report.md` file with the output of a research on LLMs in the root folder.
-
-## Understanding Your Crew
-
-The agent_hub Crew is composed of multiple AI agents, each with unique roles, goals, and tools. These agents collaborate on a series of tasks, defined in `config/tasks.yaml`, leveraging their collective skills to achieve complex objectives. The `config/agents.yaml` file outlines the capabilities and configurations of each agent in your crew.
-
-## Support
-
-For support, questions, or feedback regarding the AgentHub Crew or crewAI.
-- Visit our [documentation](https://docs.crewai.com)
-- Reach out to us through our [GitHub repository](https://github.com/joaomdmoura/crewai)
-- [Join our Discord](https://discord.com/invite/X4JWnZnxPb)
-- [Chat with our docs](https://chatg.pt/DWjSBZn)
-
-Let's create wonders together with the power and simplicity of crewAI.
+*   **Research Endpoint**: `POST /research`
+*   **Career Endpoint**: `POST /career-advice`

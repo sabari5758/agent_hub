@@ -37,7 +37,9 @@ def train():
         'current_year': str(datetime.now().year)
     }
     try:
-        AgentHub().crew().train(n_iterations=int(sys.argv[1]), filename=sys.argv[2], inputs=inputs)
+        n_iterations = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+        filename = sys.argv[2] if len(sys.argv) > 2 else "trained_crew.json"
+        AgentHub().crew().train(n_iterations=n_iterations, filename=filename, inputs=inputs)
 
     except Exception as e:
         raise Exception(f"An error occurred while training the crew: {e}")

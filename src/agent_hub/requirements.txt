@@ -1,0 +1,7 @@
+crewai
+fastapi
+uvicorn
+python-dotenv
+crewai_tools
+typing
+gunicorn

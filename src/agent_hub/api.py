@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, HTTPException
 from agent_hub.crew import AgentHub
 from agent_hub.schema import TrendRequest, TrendResult, JobResult
@@ -80,4 +82,8 @@ async def get_career_advice(payload: TrendRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Render and other servers provide a "PORT" environment variable
+    port = int(os.environ.get("PORT", 8000)) 
+    
+    # Use 0.0.0.0 to make it accessible to the outside world
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

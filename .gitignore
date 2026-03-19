@@ -1,3 +1,22 @@
-.env
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+
+# uv & Dependencies
+.uv/
+# We keep uv.lock and requirements.txt, but ignore local build artifacts
+dist/
+build/
+
+# CrewAI & Agents
+# If you use local storage for agent 'memory' or 'embeddings'
+.crewai/
+db.sqlite3
+*.log
+
+# OS specific
 .DS_Store
+Thumbs.db

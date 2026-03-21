@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from agent_hub.custom_searchtool import ResilientSearchTool, VisualScraperTool
 load_dotenv()
 
 from crewai import Agent, Crew, Process, Task, LLM
@@ -8,7 +9,6 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 from agent_hub.schema import JobResult, TrendResult
 
-from crewai_tools import  SerperDevTool, WebsiteSearchTool
 # If you want to run a snippet of code before or after the crew starts,
 # you can use the @before_kickoff and @after_kickoff decorators
 # https://docs.crewai.com/concepts/crews#example-crew-class-with-decorators
@@ -21,16 +21,19 @@ class AgentHub():
     tasks: List[Task]
     
     primary_llm = LLM(
-    model="groq/llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"), # Primary Key
-    fallbacks=[
-        # If Groq fails, LiteLLM looks for GEMINI_API_KEY in your .env
-        LLM(
-            model="gemini/gemini-2.0-flash",
-            api_key=os.getenv("GEMINI_API_KEY")
-        )
-    ]
-)
+    # Using 3.1 because 3.3 sometimes hallucinates brackets '[]' in tool calls on Groq
+        model="groq/llama-3.3-70b-versatile",
+        api_key=os.getenv("GROQ_API_KEY"), # Primary Key
+        
+        fallbacks=[
+            {"model": "gemini/gemini-2.0-flash", "api_key": os.getenv("GEMINI_API_KEY")}
+        ]
+    )
+    critic_llm = LLM(
+    model="cerebras/llama-3.3-70b", 
+    api_key=os.getenv("CEREBRAS_API_KEY"),
+    temperature=0 # Low temperature makes the critic consistent and strict
+    )
 
     # Learn more about YAML configuration files here:
     # Agents: https://docs.crewai.com/concepts/agents#yaml-configuration-recommended
@@ -41,11 +44,11 @@ class AgentHub():
     
     # config tools
     # Explicitly naming tools to prevent LLM from hallucinating incorrect tool names
-    search_tool = SerperDevTool(
+    search_tool = ResilientSearchTool(
         name="google_search",
         description="Search the internet for up-to-date news, trends, and information."
     )
-    web_tool = WebsiteSearchTool(
+    web_tool = VisualScraperTool(
         name="website_scraper",
         description="Scrape and read the content of a specific website URL."
     )
@@ -75,6 +78,17 @@ class AgentHub():
             max_iter=3
         )
 
+
+    @agent
+    def quality_analyst(self) -> Agent:
+        return Agent(
+            role="Llama Quality Auditor",
+            goal="Audit the JSON output and verify facts against the original source.",
+            backstory="A high-speed auditor who uses Llama 3.3 to find logical flaws.",
+            llm=self.critic_llm,
+            verbose=True
+        )
+
     @agent
     def career_analyst(self) -> Agent:
         return Agent(
@@ -96,9 +110,25 @@ class AgentHub():
     @task
     def research_task(self) -> Task:
         return Task(
-            config=self.tasks_config['research_task'], # type: ignore[index]
-            create_directory=True,
-            output_pydantic=TrendResult
+            config=self.tasks_config['research_task'],
+            agent=self.tech_scout(),
+            # Forces the researcher to output structured JSON matching your model
+            output_pydantic=TrendResult 
+        )
+
+    @task
+    def review_task(self) -> Task:
+        return Task(
+            description=(
+                "Review the TrendResult object from the research_task. "
+                "Compare the extracted data against the original search results. "
+                "If there are missing fields, incorrect data, or hallucinations, provide a list of corrections. "
+                "If the data is perfect, respond with 'Passed'."
+            ),
+            expected_output="A 'Passed' status string or a bulleted list of required corrections.",
+            agent=self.quality_analyst(),
+            # This passes the Pydantic object from research_task to this task
+            context=[self.research_task()] 
         )
 
     @task

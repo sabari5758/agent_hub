@@ -21,7 +21,6 @@ class AgentHub():
     tasks: List[Task]
     
     primary_llm = LLM(
-    # Using 3.1 because 3.3 sometimes hallucinates brackets '[]' in tool calls on Groq
         model="groq/llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY"), # Primary Key
         

@@ -2,6 +2,7 @@ import os
 import time
 
 from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
 from agent_hub.crew import AgentHub
 from agent_hub.schema import TrendRequest, TrendResult, JobResult
 from crewai import Crew
@@ -9,12 +10,15 @@ from crewai import Crew
 def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-clear_terminal()
-time.sleep(0.5) # Add a small delay to make the clearing visible
-print("🚀 Starting Agent Hub API on port 8000...")
 
 app = FastAPI(title="IT Sector Agent API")
 tracker = AgentHub()
+
+@asynccontextmanager
+async def startup_event():
+    clear_terminal()
+    time.sleep(0.5)
+    print("🚀 Starting Agent Hub API...")
 
 # ENDPOINT 1: Only runs the Tech Scout / Research
 @app.post("/research", response_model=TrendResult)
@@ -44,10 +48,7 @@ async def get_tech_trends(payload: TrendRequest):
             raw_data = [t.model_dump() if hasattr(t, 'model_dump') else t for t in result.pydantic.trends]
         elif result.json_dict:
             raw_data = result.json_dict.get('trends', [])
-
-        if not raw_data:
-            return {"trends": [], "status": "failed", "detail": "Agent could not retrieve trends due to tool failures or lack of relevant information."}
-
+        
         return {
             "trends": raw_data,
             "status": "completed"
@@ -86,9 +87,6 @@ async def get_career_advice(payload: TrendRequest):
             print(f"DEBUG: Raw Agent Output: {result.raw}")
             raw_data = result.json_dict.get('jobs', [])
             topic_result = result.json_dict.get('topic', payload.topic)
-        
-        if not raw_data:
-            return {"jobs": [], "topic": topic_result, "status": "failed", "detail": "Agent could not retrieve job openings due to tool failures or lack of relevant information."}
 
         return {"jobs": raw_data, "topic": topic_result, "status": "completed"}
     except Exception as e:
@@ -96,6 +94,6 @@ async def get_career_advice(payload: TrendRequest):
 if __name__ == "__main__":
     import uvicorn
     # Render and other servers provide a "PORT" environment variable
-    port = int(os.environ.get("PORT", 8000)) 
+    port = int(os.environ.get("PORT", "8000")) 
     # Use 0.0.0.0 to make it accessible to the outside world
     uvicorn.run(app, host="0.0.0.0", port=port)

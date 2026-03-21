@@ -1,6 +1,5 @@
 from crewai.tools import BaseTool
-from crewai_tools import ScrapeWebsiteTool, TavilySearchTool, FirecrawlScrapeWebsiteTool, WebsiteSearchTool
-from oauthlib.uri_validate import query
+from crewai_tools import ScrapeWebsiteTool, TavilySearchTool, FirecrawlSearchTool
 from pydantic import BaseModel, Field
 from typing import Type
 
@@ -28,7 +27,7 @@ class ResilientSearchTool(BaseTool):
             # Fallback to Firecrawl (Fallback Tool)
             try:
                 # Firecrawl's search feature is a great fallback for Serper
-                firecrawl = FirecrawlScrapeWebsiteTool() 
+                firecrawl = FirecrawlSearchTool() 
                 results = firecrawl._run(search_query=search_query)
                 return f"[Source: Firecrawl] {results}"
             except Exception as e:
@@ -56,8 +55,9 @@ class VisualScraperTool(BaseTool):
             result = inner_tool._run(search_query=search_query)
 
             # --- Visual Console Result ---
-            print(f"✅ [SUCCESS] Found data ({len(result)} chars)")
-            print(f"📄 [PREVIEW]: {result[:200]}...")
+            result_str = str(result) if result else ""
+            print(f"✅ [SUCCESS] Found data ({len(result_str)} chars)")
+            print(f"📄 [PREVIEW]: {result_str[:200]}...")
             print(f"{'='*60}\n")
             
             return result

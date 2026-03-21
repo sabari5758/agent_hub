@@ -1,6 +1,10 @@
-from crewai.tools import BaseTool
+import ipaddress
+from socket import socket
+from urllib.parse import urlparse
+
+from crewai.tools import BaseTool, field_validator
 from crewai_tools import ScrapeWebsiteTool, TavilySearchTool, FirecrawlSearchTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 from typing import Type
 
 
@@ -12,6 +16,36 @@ class ScraperInput(BaseModel):
 class ResilientSearchTool(BaseTool):
     name: str = "Resilient Search"
     description: str = "Search the internet for news and trends. Automatically fails over to backup if limits are hit."
+
+    @field_validator('website_url')
+    @classmethod
+    def validate_website_url(cls, v: HttpUrl) -> HttpUrl:
+        url_str = str(v)
+        parsed = urlparse(url_str)
+        hostname = parsed.hostname
+
+        if not hostname:
+            raise ValueError("Invalid hostname in URL.")
+
+        try:
+            # 2. Resolve Host to IP to prevent DNS Rebinding/SSRF
+            ip_address = socket.gethostbyname(hostname)
+            ip = ipaddress.ip_address(ip_address)
+
+            # 3. Block Private, Loopback, Link-Local, and Cloud Metadata ranges
+            if any([
+                ip.is_private,      # RFC1918 (10.x, 172.16.x, 192.168.x)
+                ip.is_loopback,     # 127.0.0.1
+                ip.is_link_local,   # 169.254.x.x (AWS/GCP Metadata)
+                ip.is_multicast,
+                ip.is_unspecified
+            ]):
+                raise ValueError(f"Access to private or local IP {ip_address} is forbidden.")
+
+        except socket.gaierror:
+            raise ValueError(f"Could not resolve hostname: {hostname}")
+
+        return v
     
     # Track usage for your React/Angular dashboard
 

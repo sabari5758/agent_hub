@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from agent_hub.custom_searchtool import ResilientSearchTool, VisualScraperTool
+from agent_hub.custom_searchtool import ResilientSearchTool, SecureScraperTool
 load_dotenv()
 
 from crewai import Agent, Crew, Process, Task, LLM
@@ -47,7 +47,7 @@ class AgentHub():
         name="google_search",
         description="Search the internet for up-to-date news, trends, and information."
     )
-    web_tool = VisualScraperTool(
+    web_tool = SecureScraperTool(
         name="website_scraper",
         description="Scrape and read the content of a specific website URL."
     )
@@ -74,7 +74,7 @@ class AgentHub():
             # 2. Disable delegation to prevent agents from trying to "invent" tools
             allow_delegation=False,
             # 3. Increase max iterations so it can recover from a small error
-            max_iter=3
+            max_iter=6
         )
 
 
@@ -85,6 +85,8 @@ class AgentHub():
             goal="Audit the JSON output and verify facts against the original source.",
             backstory="A high-speed auditor who uses Llama 3.3 to find logical flaws.",
             llm=self.critic_llm,
+            tools=[self.web_tool],
+            allow_delegation=False,
             verbose=True
         )
 

@@ -1,100 +1,87 @@
-import ipaddress
-from socket import socket
+import os
+import socket
+from typing import Type, Dict
 from urllib.parse import urlparse
+from pydantic import BaseModel, Field, PrivateAttr
+from crewai.tools import BaseTool
+from crewai_tools import TavilySearchTool, FirecrawlSearchTool, ScrapeWebsiteTool
 
-from crewai.tools import BaseTool, field_validator
-from crewai_tools import ScrapeWebsiteTool, TavilySearchTool, FirecrawlSearchTool
-from pydantic import BaseModel, Field, HttpUrl
-from typing import Type
+# --- 1. SCHEMAS ---
 
+class SearchInput(BaseModel):
+    query: str = Field(..., description="The query to search the internet for.")
 
 class ScraperInput(BaseModel):
-    search_query: str = Field(..., description="The specific thing to look for on the website.")
     website_url: str = Field(..., description="The URL of the website to scrape.")
 
+# --- 2. RESILIENT SEARCH TOOL (Tavily -> Firecrawl) ---
 
 class ResilientSearchTool(BaseTool):
-    name: str = "Resilient Search"
-    description: str = "Search the internet for news and trends. Automatically fails over to backup if limits are hit."
+    name: str = "google_search"
+    description: str = "Search the internet for news and trends. Fails over to backup if limits hit."
+    args_schema: Type[BaseModel] = SearchInput
+    _usage_stats: Dict[str, int] = PrivateAttr(default={"tavily": 0, "firecrawl": 0})
 
-    @field_validator('website_url')
-    @classmethod
-    def validate_website_url(cls, v: HttpUrl) -> HttpUrl:
-        url_str = str(v)
-        parsed = urlparse(url_str)
-        hostname = parsed.hostname
-
-        if not hostname:
-            raise ValueError("Invalid hostname in URL.")
-
+    def _run(self, query: str) -> str:
+        print(f"\n{'*'*20} 🔍 SEARCH START {'*'*20}")
+        print(f"Query: {query}")
+        
         try:
-            # 2. Resolve Host to IP to prevent DNS Rebinding/SSRF
-            ip_address = socket.gethostbyname(hostname)
-            ip = ipaddress.ip_address(ip_address)
-
-            # 3. Block Private, Loopback, Link-Local, and Cloud Metadata ranges
-            if any([
-                ip.is_private,      # RFC1918 (10.x, 172.16.x, 192.168.x)
-                ip.is_loopback,     # 127.0.0.1
-                ip.is_link_local,   # 169.254.x.x (AWS/GCP Metadata)
-                ip.is_multicast,
-                ip.is_unspecified
-            ]):
-                raise ValueError(f"Access to private or local IP {ip_address} is forbidden.")
-
-        except socket.gaierror:
-            raise ValueError(f"Could not resolve hostname: {hostname}")
-
-        return v
-    
-    # Track usage for your React/Angular dashboard
-
-    def _run(self, search_query: str) -> str:
-        # Try Tavily First (Main Tool)
-        try:
-            print(f"Attempting to use Tavily for query: {search_query}")
+            # Primary: Tavily
             tavily = TavilySearchTool()
-            results = tavily._run(query=search_query)
+            results = tavily._run(query=query)
+            self._usage_stats["tavily"] += 1
+            print(f"✅ [Tavily] Success")
             return f"[Source: Tavily] {results}"
         except Exception as e:
-            print(f"Error occurred with Tavily: {str(e)}")
-            # Fallback to Firecrawl (Fallback Tool)
+            print(f"⚠️ [Tavily] Failed: {e}. Trying Firecrawl...")
             try:
-                # Firecrawl's search feature is a great fallback for Serper
-                firecrawl = FirecrawlSearchTool() 
-                results = firecrawl._run(search_query=search_query)
+                # Fallback: Firecrawl Search
+                firecrawl = FirecrawlSearchTool()
+                results = firecrawl._run(query=query)
+                self._usage_stats["firecrawl"] += 1
                 return f"[Source: Firecrawl] {results}"
-            except Exception as e:
-                print(f"Error occurred with Firecrawl: {str(e)}")
-                return f"All tools failed: {str(e)}"
+            except Exception as final_e:
+                return f"❌ All search tools failed: {str(final_e)}"
+        finally:
+            print(f"{'*'*20} 🔍 SEARCH END {'*'*20}\n")
 
-class VisualScraperTool(BaseTool):
+# --- 3. SECURE SCRAPER TOOL (SSRF Protected) ---
+
+class SecureScraperTool(BaseTool):
     name: str = "website_scraper"
-    description: str = "Search and read content from a specific URL."
+    description: str = "Scrape content from a specific PUBLIC website URL."
     args_schema: Type[BaseModel] = ScraperInput
 
-    def _run(self, search_query: str, website_url: str) -> str:
-        # --- Visual Console Header ---
-        print(f"\n{'='*30}")
-        print(f"🌐 [SCRAPER] Target: {website_url}")
-        print(f"🧐 [QUERY]: {search_query}")
-        print(f"{'='*30}")
+    def _is_safe(self, url: str) -> bool:
+        """Blocks private IPs, Loopback, and Cloud Metadata (SSRF Protection)"""
+        try:
+            hostname = urlparse(url).hostname
+            if not hostname: return False
+            ip = socket.gethostbyname(hostname)
+            # Block: 127.x, 10.x, 192.168.x, 172.x, 169.254.x
+            forbidden = ("127.", "10.", "192.168.", "172.", "169.254.")
+            return not any(ip.startswith(prefix) for prefix in forbidden)
+        except:
+            return False
+
+    def _run(self, website_url: str) -> str:
+        print(f"\n{'='*20} 🌐 SCRAPER START {'='*20}")
+        print(f"URL: {website_url}")
+
+        if not self._is_safe(website_url):
+            print("❌ [SECURITY] Blocked Private/Local URL")
+            return "Error: Access to private or local network addresses is forbidden."
 
         try:
-            # Initialize the internal tool
-            # Note: We pass the website here so it focuses on that URL
-            inner_tool = ScrapeWebsiteTool(website_url=website_url)
-            
-            # Execute the search
-            result = inner_tool._run(search_query=search_query)
-
-            # --- Visual Console Result ---
-            result_str = str(result) if result else ""
-            print(f"✅ [SUCCESS] Found data ({len(result_str)} chars)")
-            print(f"📄 [PREVIEW]: {result_str[:200]}...")
-            print(f"{'='*60}\n")
-            
-            return result
+            # Simple Scrape (No OpenAI embeddings needed)
+            scraper = ScrapeWebsiteTool(website_url=website_url)
+            content = scraper._run()
+            print(f"✅ [Scraper] Success ({len(content)} chars)")
+            return content
         except Exception as e:
-            print(f"❌ [ERROR]: {str(e)}")
-            return f"Failed to scrape {website_url}: {str(e)}"
+            print(f"❌ [Scraper] Failed: {e}")
+            return f"Scraping error: {str(e)}"
+        finally:
+            print(f"{'='*20} 🌐 SCRAPER END {'='*20}\n")
+
